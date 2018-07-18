@@ -218,8 +218,10 @@ func (state *binTreeState) CopyFrom(ostate *binTreeState) {
 	}
 }
 
-func (state *binTreeState) SetStallIndex(index int) {
+func (state *binTreeState) SetStallIndex(index int) int {
+	oldStallIndex := state.stallIndex
 	state.stallIndex = index
+	return oldStallIndex
 }
 
 func (state *binTreeState) Reset() {
@@ -227,6 +229,26 @@ func (state *binTreeState) Reset() {
 	for i := range state.data {
 		state.data[i] = binTreeStateUnknown
 	}
+}
+
+func (state *binTreeState) resetNodeRecursive(index int) {
+	// TODO(brett19): This is technically quite slow.  It would be ideal if
+	// the binary tree itself marked the end of each node so we could do a
+	// quick loop through all the entries at once.
+
+	state.data[index] = binTreeStateUnknown
+
+	defNode := state.tree.data[index]
+	if defNode.NodeType != nodeTypeLeaf {
+		state.resetNodeRecursive(defNode.Left)
+		if defNode.NodeType != nodeTypeNot {
+			state.resetNodeRecursive(defNode.Right)
+		}
+	}
+}
+
+func (state *binTreeState) ResetNode(index int) {
+	state.resetNodeRecursive(index)
 }
 
 func (state *binTreeState) resolveRecursive(index int) {
@@ -291,6 +313,11 @@ func (state *binTreeState) MarkNode(index int, value bool) {
 
 	// We are done if we are the root node
 	if index == 0 {
+		return
+	}
+
+	// If we are the marked stall index, we should stop recursing.
+	if index == state.stallIndex {
 		return
 	}
 
